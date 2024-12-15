@@ -11,8 +11,9 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from "../../urlconfig";
+import { useAppContext } from '../../context';
 
-const TransactionCard = ({ transaction, selectedTransaction, onPress }) => {
+const TransactionCard = ({ transaction, selectedTransaction, onPress, onApprove, onReject }) => {
   return (
     <TouchableOpacity
       style={[
@@ -22,20 +23,29 @@ const TransactionCard = ({ transaction, selectedTransaction, onPress }) => {
       onPress={onPress}
     >
       <View style={styles.cardHeader}>
-        <Text style={styles.transactionId}>Transaction ID: {transaction._id}</Text>
+        <Text style={styles.transactionId}>Transaction ID: {transaction.transaction_id}</Text>
         <Text style={styles.transactionState}>{transaction.transaction_state}</Text>
       </View>
       <View style={styles.cardContent}>
         <Text style={styles.transactionText}>Sender: {transaction.senderName}</Text>
         <Text style={styles.transactionText}>Receiver: {transaction.receiverName}</Text>
-        <Text style={styles.transactionText}>Amount: {transaction.amount.toString()|| '0.00'}</Text>  {/* Convert Decimal128 to string */}
+      <Text style={styles.transactionText}>Amount: {transaction.amount.$numberDecimal}</Text>
         <Text style={styles.transactionText}>Due Date: {new Date(transaction.due_date).toLocaleDateString()}</Text>
         <Text style={styles.transactionText}>Description: {transaction.description}</Text>
       </View>
+      {transaction.transaction_state === 'PENDING' && (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.approveButton} onPress={onApprove}>
+            <Text style={styles.buttonText}>Approve</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.rejectButton} onPress={onReject}>
+            <Text style={styles.buttonText}>Reject</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
-
 
 const Send = () => {
   const [transactions, setTransactions] = useState([]);
@@ -43,9 +53,12 @@ const Send = () => {
   const [loading, setLoading] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
+  const { changeT, updatechangeT } = useAppContext();
+
   useEffect(() => {
     fetchTransactions();
-  }, [filter]);
+    
+  }, [filter, changeT]);
 
   const fetchUserById = async (userId) => {
     try {
@@ -94,6 +107,98 @@ const Send = () => {
     }
   };
 
+  const handleApprove = async (transactionId) => {
+    try {
+      const response = await fetch(`http://${BASE_URL}/transaction/approve-sender`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transaction_id: transactionId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert('Success', data.message);
+        fetchTransactions();
+      } else {
+        Alert.alert('Error', data.error);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const handleReject = async (transactionId) => {
+    try {
+      const response = await fetch(`http://${BASE_URL}/transaction/rejected-sender`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transaction_id: transactionId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert('Success', data.message);
+        fetchTransactions();
+      } else {
+        Alert.alert('Error', data.error);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    }
+  };
+  const processOverdueTransactions = async () => {
+    const senderId = await AsyncStorage.getItem('userId');
+    
+    if (!senderId) {
+        Alert.alert('Error', 'Sender ID not found');
+        return;
+    }
+
+    try {
+        const response = await fetch(`http://${BASE_URL}/api/transaction/overdue`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ senderId }),
+        });
+
+        // Log the raw response text before parsing
+        const responseText = await response.text();
+        console.log('Raw Response:', responseText);
+
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON Parse Error:', parseError);
+            Alert.alert('Error', 'Invalid server response');
+            return;
+        }
+
+        if (response.ok) {
+            Alert.alert('Success', data.message);
+            fetchTransactions();
+            updatechangeT(); // Refresh the transaction list
+        } else if (response.status === 505) {
+            Alert.alert('Defaulted Transactions', data.message);
+        } else {
+            Alert.alert('No overdue transactions found', data.message);
+        }
+    } catch (error) {
+        console.error('Fetch Error:', error);
+        Alert.alert('Error', error.message);
+    }
+};
+  
+
+  
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Transaction List as Loan Provider</Text>
@@ -111,6 +216,13 @@ const Send = () => {
         <Picker.Item label="Defaulted" value="DEFAULTED" />
         <Picker.Item label="Returned" value="RETURNED" />
       </Picker>
+      <TouchableOpacity
+      style={styles.overdueButton}
+      onPress={processOverdueTransactions}
+      >
+        <Text style={styles.buttonText}>Process Overdue Transactions</Text>
+      </TouchableOpacity>
+
 
       {loading ? (
         <ActivityIndicator size="large" color="#4CAF50" style={styles.loader} />
@@ -123,7 +235,10 @@ const Send = () => {
               transaction={item}
               selectedTransaction={selectedTransaction}
               onPress={() => setSelectedTransaction(item)}
+              onApprove={() => handleApprove(item.transaction_id)}
+              onReject={() => handleReject(item.transaction_id)}
             />
+
           )}
           contentContainerStyle={styles.transactionList}
         />
@@ -136,12 +251,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#f9f9f',
+    backgroundColor: '#f9f9f9',
   },
   header: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 16,
+    marginTop: 16,
     color: '#333',
     textAlign: 'center',
   },
@@ -153,11 +269,11 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
   transactionCard: {
-    padding: 16,
+    padding: 12,
     backgroundColor: '#fff',
     marginBottom: 12,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#ddd',
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -175,7 +291,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   transactionId: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#333',
   },
@@ -198,6 +314,43 @@ const styles = StyleSheet.create({
   transactionList: {
     paddingBottom: 20,
   },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  approveButton: {
+    backgroundColor: '#4CAF50',
+    padding: 10,
+    borderRadius: 8,
+    flex: 0.48,
+    alignItems: 'center',
+  },
+  rejectButton: {
+    backgroundColor: '#f44336',
+    padding: 10,
+    borderRadius: 8,
+    flex: 0.48,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  overdueButton: {
+    backgroundColor: '#FF9800',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
 });
 
 export default Send;

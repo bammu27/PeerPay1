@@ -20,87 +20,81 @@ const PanVerify = () => {
   const [image, setImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigation = useNavigation();
+  
 
-  const handleImagePicker = async () => {
-    // Request media library permissions
-    const { status: libraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+ 
+   const handleImagePicker = async () => {
+     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+ 
+     if (status !== "granted") {
+       Alert.alert("Permission Required", "Please allow media access to upload an image.");
+       return;
+     }
+ 
+     const result = await ImagePicker.launchImageLibraryAsync({
+       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+       allowsEditing: false,
+       quality: 1,
+     });
+ 
+     if (!result.canceled) {
+       const selectedImageUri = result.assets[0]?.uri; // Correct URI for the new API
+       if (selectedImageUri) {
+         setImage(selectedImageUri);
+         console.log("Image selected:", selectedImageUri);
+       }
+     }
+   };
 
-    if (libraryStatus !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Media library permissions are needed to select an image."
-      );
-      return;
-    }
-
-    // Launch the image library picker
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType, // Correct usage of MediaType
-      allowsEditing: false, // Prevent cropping
-      quality: 1,
-    });
-
-    if (!result.cancelled) {
-      // Ensure compatibility with all versions of expo-image-picker
-      const selectedImageUri = result.uri || result.assets[0]?.uri;
-      if (selectedImageUri) {
-        setImage(selectedImageUri);
-        console.log('Image selected:', selectedImageUri);
-      } else {
-        console.log('No image URI found in the selection');
-      }
-    }
-  };
-
-  const handleSubmit = async () => {
+   const handleSubmit = async () => {
     if (!image) {
-      Alert.alert("Error", "Please select a PAN image.");
+      Alert.alert("Error", "Please select an Aadhaar image.");
       return;
     }
-
+  
     setIsSubmitting(true);
     const userId = await AsyncStorage.getItem("userId");
-
+  
     if (!userId) {
       Alert.alert("Error", "User ID not found. Please register again.");
       setIsSubmitting(false);
       return;
     }
-
+  
     const formData = new FormData();
-    formData.append("userId", userId);
-
-    // Prepare the image for upload
-    const localUri = image;
+    const localUri = Platform.OS === "android" ? image : image.replace("file://", "");
     const filename = localUri.split("/").pop();
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : `image`;
-
-    formData.append("file", {
-      uri: Platform.OS === "android" ? localUri : localUri.replace("file://", ""),
+    const type = `image/${filename.split(".").pop()}`;
+  
+    formData.append("userId", userId);
+    formData.append("panImage", {
+      uri: localUri,
       name: filename,
-      type: type,
+      type:type,
     });
-
     try {
-      const response = await fetch(`http://${BASE_URL}:3000/auth/verify-pan`, {
+      const response = await fetch(`http://${BASE_URL}/auth/verify-pan`, {
         method: "POST",
         headers: {
           "Content-Type": "multipart/form-data",
         },
         body: formData,
       });
-
+  
+      const responseJson = await response.json();
+  
       if (response.ok) {
-        const result = await response.json();
-        Alert.alert("Verification Successful", result.message);
+        Alert.alert("Verification Successful", responseJson.message);
+        navigation.navigate("PasswordCreate");
       } else {
-        const error = await response.text();
-        Alert.alert("Error", `Verification failed: ${error}`);
+        Alert.alert("Verification Failed", responseJson.message || "Unknown error occurred");
+        console.log("Server response:", responseJson);
       }
     } catch (error) {
-      console.error("Error during PAN verification:", error);
-      Alert.alert("Error", "Network request failed. Please check your connection.");
+      console.error("Error during Aadhaar verification:", error);
+      Alert.alert("Error", error.message || "Something went wrong.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

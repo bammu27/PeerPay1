@@ -3,9 +3,11 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native
 import axios from 'axios';
 import { BASE_URL } from '../../urlconfig';
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAppContext } from '../../context'
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
+  const {changeT, updatechgeT} = useAppContext()
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -21,7 +23,7 @@ const Notifications = () => {
     };
 
     fetchNotifications();
-  }, []);
+  }, [changeT]);
 
   const renderItem = ({ item }) => (
     <TouchableOpacity style={[styles.notificationItem, item.read ? styles.read : styles.unread]}>
@@ -100,7 +102,7 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans-Regular',
     marginBottom: 8,
     fontWeight:'700'
-    
+     
   },
   transactionDetails: {
     fontSize: 12,

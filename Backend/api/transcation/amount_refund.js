@@ -101,12 +101,12 @@ async function money_overdue(req, res) {
         if (processedTransactions.length > 0) {
             return res.status(200).json({ 
                 message: 'Overdue transactions processed successfully',
-                processedTransactions 
+     
             });
         } else if (defaultedTransactions.length > 0) {
             return res.status(505).json({ 
                 message: 'Overdue transactions defaulted',
-                defaultedTransactions 
+               
             });
         } else {
             return res.status(404).json({ message: 'No overdue transactions found' });
@@ -114,7 +114,7 @@ async function money_overdue(req, res) {
 
     } catch (error) {
         console.error('Error processing overdue transactions:', error);
-        res.status(500).json({ error: 'Internal server error', details: error.message });
+        res.status(500).json({ error: 'Internal server error',});
     }
 }
 module.exports = money_overdue;

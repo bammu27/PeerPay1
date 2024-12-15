@@ -7,4 +7,4 @@ const getLocalIp = async () => {
   return ipAddress;
 };
 
-export const BASE_URL = "192.168.190.194:3000";
+export const BASE_URL = "192.168.43.72:3000";

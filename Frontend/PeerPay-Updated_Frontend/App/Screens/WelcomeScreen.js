@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Image, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-function WelcomeScreen({ navigation }) {
+function WelcomeScreen({navigation}) {
+
+    
     return (
         <View style={styles.container}>
             <Image style={styles.logo} source={require("../assets/Logo.png")} />
@@ -9,7 +11,7 @@ function WelcomeScreen({ navigation }) {
 
             <TouchableOpacity
                 style={styles.loginButton}
-                onPress={() => navigation.navigate('Login')}
+                onPress={() => navigation.navigate('Menu')}
             >
                 <Text style={styles.loginButtonText}>Login</Text>
             </TouchableOpacity>

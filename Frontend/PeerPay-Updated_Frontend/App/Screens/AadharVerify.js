@@ -14,6 +14,8 @@ import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { AntDesign, Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import { BASE_URL } from "../../urlconfig";
 
 const AadhaarVerify = () => {
   const [image, setImage] = useState(null);
@@ -21,97 +23,84 @@ const AadhaarVerify = () => {
   const navigation = useNavigation();
 
   const handleImagePicker = async () => {
-    // Request media library permissions
-    const { status: libraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  
-    if (libraryStatus !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Media library permissions are needed to select an image."
-      );
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== "granted") {
+      Alert.alert("Permission Required", "Please allow media access to upload an image.");
       return;
     }
-  
-    // Launch the image library picker
+
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType, // Correct usage of MediaType
-      allowsEditing: false, // Prevent cropping
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
       quality: 1,
     });
-  
-    if (!result.cancelled) {
-      // Ensure compatibility with all versions of expo-image-picker
-      const selectedImageUri = result.uri || result.assets[0]?.uri;
+
+    if (!result.canceled) {
+      const selectedImageUri = result.assets[0]?.uri; // Correct URI for the new API
       if (selectedImageUri) {
         setImage(selectedImageUri);
-        console.log('Image selected:', selectedImageUri);
-      } else {
-        console.log('No image URI found in the selection');
+        console.log("Image selected:", selectedImageUri);
       }
     }
   };
-  
+
   const handleSubmit = async () => {
     if (!image) {
       Alert.alert("Error", "Please select an Aadhaar image.");
       return;
     }
-
+  
     setIsSubmitting(true);
     const userId = await AsyncStorage.getItem("userId");
-
+  
     if (!userId) {
       Alert.alert("Error", "User ID not found. Please register again.");
       setIsSubmitting(false);
       return;
     }
-
+  
     const formData = new FormData();
-    formData.append("userId", userId);
-
-    // Prepare the image for upload
-    const localUri = image;
+    const localUri = Platform.OS === "android" ? image : image.replace("file://", "");
     const filename = localUri.split("/").pop();
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : `image`;
-
-    formData.append("file", {
-      uri: Platform.OS === "android" ? localUri : localUri.replace("file://", ""),
+    const type = `image/${filename.split(".").pop()}`;
+  
+    formData.append("userId", userId);
+    formData.append("aadhaarImage", {
+      uri: localUri,
       name: filename,
-      type: type,
+      type:type,
     });
-
     try {
-      const response = await fetch("https://192.168.105.194:3000/auth/verify-aadhaar", {
+      const response = await fetch(`http://${BASE_URL}/auth/verify-aadhaar`, {
         method: "POST",
         headers: {
           "Content-Type": "multipart/form-data",
         },
         body: formData,
       });
-    
+  
+      const responseJson = await response.json();
+  
       if (response.ok) {
-        
-        const result = await response.json();
-        Alert.alert("Verification Successful", result.message);
+        Alert.alert("Verification Successful", responseJson.message);
+        navigation.navigate("PanVerify");
       } else {
-        const error = await response.text();
-        Alert.alert("Error", `Verification failed: ${error}`);
+        Alert.alert("Verification Failed", responseJson.message || "Unknown error occurred");
+        console.log("Server response:", responseJson);
       }
     } catch (error) {
-      console.error("Error during Aadhaar verification:", error);
-      Alert.alert("Error", "Network request failed. Please check your connection.");
+      console.error("Error during Pan verifaction", error);
+      Alert.alert("Error", error.message || "Something went wrong.");
+    } finally {
+      setIsSubmitting(false);
     }
-    
   };
+  
+  
 
   return (
-    <LinearGradient
-      colors={["#6A11CB", "#2575FC"]}
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <LinearGradient colors={["#6A11CB", "#2575FC"]} style={styles.container}>
       <View style={styles.contentContainer}>
         <View style={styles.headerContainer}>
           <Ionicons name="document-text-outline" size={50} color="white" />
@@ -143,20 +132,18 @@ const AadhaarVerify = () => {
           {isSubmitting ? (
             <ActivityIndicator color="white" />
           ) : (
-            <View style={styles.submitButtonContent}>
-              <Text style={styles.submitButtonText}>Verify Aadhaar</Text>
-              <Ionicons name="arrow-forward" size={20} color="white" />
-            </View>
+            <Text style={styles.submitButtonText}>Verify Aadhaar</Text>
           )}
         </TouchableOpacity>
 
         <Text style={styles.disclaimerText}>
-          Ensure your Aadhaar document is clear and readable
+          Ensure your Aadhaar document is clear and readable.
         </Text>
       </View>
     </LinearGradient>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

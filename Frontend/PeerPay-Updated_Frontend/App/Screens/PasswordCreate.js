@@ -2,11 +2,14 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, Button, ActivityIndicator, StyleSheet, TouchableOpacity } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../../urlconfig";
+import { useNavigation } from "@react-navigation/native";
 
 // API URL for the backend
 const API_URL = `http://${BASE_URL}/auth/set-password`;
 
 const SetPasswordForm = () => {
+
+  const navigation = useNavigation();
   const [userId, setUserId] = useState(""); // To store userId from AsyncStorage or some global state
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

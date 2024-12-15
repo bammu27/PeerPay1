@@ -11,8 +11,9 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from "../../urlconfig";
+import { useAppContext } from '../../context';
 
-const TransactionCard = ({ transaction, selectedTransaction, onPress }) => {
+const TransactionCard = ({ transaction, selectedTransaction, onPress, onApprove, onReject }) => {
   return (
     <TouchableOpacity
       style={[
@@ -28,24 +29,35 @@ const TransactionCard = ({ transaction, selectedTransaction, onPress }) => {
       <View style={styles.cardContent}>
         <Text style={styles.transactionText}>Sender: {transaction.senderName}</Text>
         <Text style={styles.transactionText}>Receiver: {transaction.receiverName}</Text>
-        <Text style={styles.transactionText}>Amount: ${transaction.amount.toString()}</Text> {/* Convert Decimal128 to string */}
+        <Text style={styles.transactionText}>Amount: {transaction.amount.$numberDecimal}</Text> 
         <Text style={styles.transactionText}>Due Date: {new Date(transaction.due_date).toLocaleDateString()}</Text>
         <Text style={styles.transactionText}>Description: {transaction.description}</Text>
       </View>
+      {transaction.transaction_state === 'APPROVED' && (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.approveButton} onPress={onApprove}>
+            <Text style={styles.buttonText}>Approve</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.rejectButton} onPress={onReject}>
+            <Text style={styles.buttonText}>Reject</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
 
-
 const Receiver = () => {
+  const { changeT, updatechangeT } = useAppContext();
+
   const [transactions, setTransactions] = useState([]);
-  const [filter, setFilter] = useState('ALL'); // Default filter
+  const [filter, setFilter] = useState('ALL');
   const [loading, setLoading] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
   useEffect(() => {
     fetchTransactions();
-  }, [filter]);
+  }, [filter, changeT]);
 
   const fetchUserById = async (userId) => {
     try {
@@ -64,34 +76,28 @@ const Receiver = () => {
       Alert.alert('Error', 'User ID not found. Please log in again.');
       return;
     }
-  
+
     setLoading(true);
     try {
       let url = `http://${BASE_URL}/alltransactions/receiver/${receiverId}`;
       if (filter !== 'ALL') {
         url = `http://${BASE_URL}/transaction/${filter.toLowerCase()}/receiver/${receiverId}`;
       }
-  
+
       const response = await fetch(url);
-  
-      // Check for HTTP status codes
+
       if (!response.ok) {
-        console.error(`API Error: ${response.status} ${response.statusText}`);
-        Alert.alert(response.json);
+        Alert.alert('Error', `Failed to fetch transactions. (${response.status})`);
         setTransactions([]);
         return;
       }
-  
+
       const data = await response.json();
-      console.log('Fetched Transactions:', data);
-  
       if (!data || data.length === 0) {
-        Alert.alert('No transactions available');
         setTransactions([]);
         return;
       }
-  
-      // Fetch sender and receiver names
+
       const transactionsWithNames = await Promise.all(
         data.map(async (transaction) => ({
           ...transaction,
@@ -99,22 +105,60 @@ const Receiver = () => {
           receiverName: await fetchUserById(transaction.receiver_id) || 'Unknown Receiver',
         }))
       );
-  
+
       setTransactions(transactionsWithNames);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert('Error', 'An unexpected error occurred while fetching transactions.');
     } finally {
       setLoading(false);
     }
   };
-  
 
+  const handleApprove = async (transactionId) => {
+    try {
+      const response = await fetch(`http://${BASE_URL}/transaction/approve-receiver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction_id: transactionId }),
+      });
+      const result = await response.json();
 
+      if (response.ok) {
+        Alert.alert('Success', result.message);
+        fetchTransactions();
+        updatechangeT()
+      } else {
+        Alert.alert('Error', result.error);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to approve the transaction.');
+    }
+  };
+
+  const handleReject = async (transactionId) => {
+    try {
+      const response = await fetch(`http://${BASE_URL}/transaction/rejected-receiver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction_id: transactionId }),
+      });
+      const result = await response.json();
+
+      if (response.ok) {
+        Alert.alert('Success', result.message);
+        fetchTransactions();
+        updatechangeT()
+      } else {
+        Alert.alert('Error', result.error);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to reject the transaction.');
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Transaction List as Loan Provider</Text>
+      <Text style={styles.header}>Transaction List as Loan Receiver</Text>
       <Picker
         selectedValue={filter}
         onValueChange={(value) => setFilter(value)}
@@ -141,6 +185,8 @@ const Receiver = () => {
               transaction={item}
               selectedTransaction={selectedTransaction}
               onPress={() => setSelectedTransaction(item)}
+              onApprove={() => handleApprove(item.transaction_id)}
+              onReject={() => handleReject(item.transaction_id)}
             />
           )}
           contentContainerStyle={styles.transactionList}
@@ -149,6 +195,7 @@ const Receiver = () => {
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -215,6 +262,28 @@ const styles = StyleSheet.create({
   },
   transactionList: {
     paddingBottom: 20,
+  },
+
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  approveButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+  },
+  rejectButton: {
+    backgroundColor: '#F44336',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 

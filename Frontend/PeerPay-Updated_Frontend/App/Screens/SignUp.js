@@ -14,7 +14,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from "../../urlconfig";
 
 
+
 const SignUp = ({ navigation }) => {
+
+  const navigation = useNavigation();
   const [name, setName] = useState("");
   const [dob, setDob] = useState(new Date());
   const [showDobPicker, setShowDobPicker] = useState(false);

@@ -67,11 +67,21 @@ function Profile() {
                     <Text style={styles.detailsText}>Address: {user.address.street}, {user.address.city}, {user.address.state}</Text>
                 </View>
                 <View style={styles.detailsCard}>
+                <Text style={styles.detailsText}>
+                 Account Balance {user.Amount.$numberDecimal}
+                </Text>
+                </View>
+                <View style={styles.detailsCard}>
                     <Text style={styles.detailsText}>Aadhaar Number: {user.aadhaar}</Text>
                 </View>
                 <View style={styles.detailsCard}>
                     <Text style={styles.detailsText}>PAN Card Number: {user.pan}</Text>
                 </View>
+                <View style={styles.detailsCard}>
+
+                    <Text style={styles.detailsText}>Email: {user.email}</Text>
+                </View>
+                
             </ScrollView>
         </SafeAreaView>
     );
